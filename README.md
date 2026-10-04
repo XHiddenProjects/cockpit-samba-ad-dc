@@ -47,7 +47,7 @@ tar xzf samba-adc-1.0.0.tar.gz && cd samba-adc-1.0.0 && sudo ./install.sh
 ## Repository layout
 
 ```
-Cockpit-extensions/
+cockpit-samba-ad-dc/
   install.sh  uninstall.sh      # install any extension by name
   samba-adc/                    # one extension
     manifest.json index.html *.js *.py vendor/     # runtime files (what gets installed)
