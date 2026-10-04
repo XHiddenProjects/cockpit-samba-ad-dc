@@ -1,4 +1,4 @@
-# Cockpit-extensions
+# Cockpit Samba AD DC
 
 A collection of extensions for [Cockpit](https://cockpit-project.org), the web console for Linux servers.
 Each extension is a self-contained directory with its own installer, tests and changelog.
@@ -10,7 +10,7 @@ Each extension is a self-contained directory with its own installer, tests and c
 ## Quick start
 
 ```bash
-git clone https://github.com/YOUR-USER/Cockpit-extensions.git
+git clone https://github.com/XHiddenProjects/cockpit-samba-ad-dc.git
 cd Cockpit-extensions
 
 ./install.sh --list                    # what is available
