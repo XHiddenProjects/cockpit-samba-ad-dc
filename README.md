@@ -11,7 +11,7 @@ Each extension is a self-contained directory with its own installer, tests and c
 
 ```bash
 git clone https://github.com/XHiddenProjects/cockpit-samba-ad-dc.git
-cd Cockpit-extensions
+cd cockpit-samba-ad-dc
 
 ./install.sh --list                    # what is available
 ./install.sh samba-adc --check         # pre-flight checks only; changes nothing
