@@ -5,7 +5,7 @@ Each extension is a self-contained directory with its own installer, tests and c
 
 | Extension | What it does | Version |
 |---|---|---|
-| [`samba-adc`](samba-adc/) | Administer a **Samba Active Directory Domain Controller**: users, groups, DNS, FSMO, a GPMC/GPME-style **Group Policy** editor with the full Windows 11 policy set, and diagnostics for "visible in Explorer but can't open" and `gpupdate` connectivity errors | 1.0.0 |
+| [`samba-adc`](samba-adc/) | Administer a **Samba Active Directory Domain Controller**: users, groups, DNS, FSMO, a GPMC/GPME-style **Group Policy** editor with the full Windows 11 policy set, and diagnostics for "visible in Explorer but can't open" and `gpupdate` connectivity errors | 1.0.1 |
 
 ## Quick start
 
@@ -41,7 +41,7 @@ Each extension's README lists anything extra.
 Tagged releases attach `<name>-<version>.tar.gz` (runtime files + installer only):
 
 ```bash
-tar xzf samba-adc-1.0.0.tar.gz && cd samba-adc-1.0.0 && sudo ./install.sh
+tar xzf samba-adc-1.0.1.tar.gz && cd samba-adc-1.0.1 && sudo ./install.sh
 ```
 
 ## Repository layout
