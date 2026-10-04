@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          # shellcheck disable=SC2046
+          shellcheck -x $(git ls-files '*.sh')
+      - name: JavaScript syntax
+        run: |
+          for f in samba-adc/*.js samba-adc/tests/*.js; do node --check "$f"; done
+      - name: Python syntax
+        run: python3 -m py_compile samba-adc/*.py samba-adc/tools/*.py scripts/*.py
+
+  test:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: samba-adc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: JavaScript unit tests
+        run: npm test
+      - name: Python unit tests (Registry.pol tests skip without Samba)
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package consistency
+        run: python3 scripts/check_package.py samba-adc
+      - name: Installer round trip (custom prefix)
+        run: |
+          ./install.sh samba-adc --prefix "$RUNNER_TEMP/cockpit" -y
+          test -f "$RUNNER_TEMP/cockpit/samba-adc/index.html"
+          test -f "$RUNNER_TEMP/cockpit/samba-adc/gpo_backend.py"
+          test ! -e "$RUNNER_TEMP/cockpit/samba-adc/tests"
+          ./uninstall.sh samba-adc --prefix "$RUNNER_TEMP/cockpit"
+          test ! -e "$RUNNER_TEMP/cockpit/samba-adc"
+      - name: Build tarball
+        run: make dist EXT=samba-adc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: samba-adc-dist
+          path: dist/*.tar.gz

@@ -1,0 +1,20 @@
+{
+    "name": "samba-adc",
+    "requires": {
+        "cockpit": "250"
+    },
+    "menu": {
+        "index": {
+            "label": "Samba AD DC",
+            "order": 65,
+            "keywords": [
+                { "matches": ["samba", "active directory", "ad dc", "smb", "file sharing", "domain controller"] }
+            ]
+        }
+    },
+    "tools": {
+        "index": {
+            "label": "Samba AD DC"
+        }
+    }
+}

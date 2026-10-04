@@ -1,0 +1,15 @@
+{
+  "name": "samba-adc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cockpit module for administering a Samba Active Directory Domain Controller (dev/test tooling only; the module itself has no build step or runtime dependencies)",
+  "scripts": {
+    "test": "node tests/core.test.js && node tests/builtin.test.js",
+    "check": "node --check gpo-core.js && node --check gpo-builtin.js && node --check gpo-catalogs.js && node --check gpo-ui.js && node --check sharing-ui.js && node --check samba-adc.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.1"
+  },
+  "engines": { "node": ">=22" },
+  "license": "MIT"
+}

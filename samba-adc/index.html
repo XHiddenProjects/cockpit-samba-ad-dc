@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Samba AD DC</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // Resolve and apply the theme before first paint, to avoid a flash of
+    // the wrong theme. Priority: this page's own manual override (the
+    // "Theme" button in the header) > Cockpit's shell:style / cockpit-style
+    // signals (best-effort - not guaranteed to be readable, since Cockpit
+    // may isolate package pages on a different origin) > OS preference.
+    (function () {
+      function resolve() {
+        var manual = null;
+        try { manual = localStorage.getItem("sadc:theme"); } catch (e) {}
+        if (manual === "light" || manual === "dark") return manual;
+
+        var pref = "auto";
+        try { pref = localStorage.getItem("shell:style") || "auto"; } catch (e) {}
+        if (pref === "light" || pref === "dark") return pref;
+
+        return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", resolve());
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="sadc-app">
+
+    <div class="sadc-header">
+      <div>
+        <p class="sadc-title">Samba Active Directory Domain Controller</p>
+        <p class="sadc-subtitle" id="sadc-domain-line">Loading domain information&hellip;</p>
+      </div>
+      <div class="sadc-service-bar">
+        <span id="sadc-service-badge" class="badge neutral">checking service&hellip;</span>
+        <select id="sadc-service-select" title="Samba service unit to control"></select>
+        <button id="sadc-service-restart" class="small">Restart</button>
+        <span class="sadc-divider"></span>
+        <button id="sadc-creds-btn" class="small" title="Credentials used for samba-tool commands that need real authentication (DRS, GPO, FSMO transfer/seize, DNS, ...). Local list/show/create/delete commands never need these.">Credentials: not set</button>
+        <label class="inline" for="sadc-db-url" title="Passed as -H to samba-tool. GPO, DRS, Sites, and FSMO transfer/seize automatically use this DC's own detected hostname unless you override it here. If 'Could not find DC for domain' persists, try ldap://127.0.0.1 or this DC's real IP.">-H</label>
+        <input type="text" id="sadc-db-url" placeholder="auto">
+        <span class="sadc-divider"></span>
+        <button id="sadc-theme-toggle" class="small" title="Cycle this page's theme: Auto (follows Cockpit) / Light / Dark">Theme: Auto</button>
+        <button id="sadc-refresh-all" class="small">Refresh</button>
+      </div>
+    </div>
+
+    <div class="sadc-tabs" id="sadc-tabs">
+      <div class="sadc-tab active" data-panel="overview">Overview</div>
+      <div class="sadc-tab" data-panel="domain">Domain</div>
+      <div class="sadc-tab" data-panel="forest">Forest</div>
+      <div class="sadc-tab" data-panel="fsmo">FSMO</div>
+      <div class="sadc-tab" data-panel="sites">Sites</div>
+      <div class="sadc-tab" data-panel="dns">DNS</div>
+      <div class="sadc-tab" data-panel="users">Users</div>
+      <div class="sadc-tab" data-panel="groups">Groups</div>
+      <div class="sadc-tab" data-panel="computers">Computers</div>
+      <div class="sadc-tab" data-panel="contacts">Contacts</div>
+      <div class="sadc-tab" data-panel="ous">Organizational Units</div>
+      <div class="sadc-tab" data-panel="gpo">Group Policy</div>
+      <div class="sadc-tab" data-panel="spn">SPNs</div>
+      <div class="sadc-tab" data-panel="delegation">Delegation</div>
+      <div class="sadc-tab" data-panel="acls">ACLs</div>
+      <div class="sadc-tab" data-panel="time">Server Time</div>
+      <div class="sadc-tab" data-panel="shares">File Shares</div>
+      <div class="sadc-tab" data-panel="config">Configuration</div>
+    </div>
+
+    <div class="sadc-body">
+      <div id="sadc-alert-area"></div>
+
+      <!-- OVERVIEW -->
+      <div class="sadc-panel active" id="panel-overview">
+        <div class="card">
+          <div class="card-header">Domain</div>
+          <div class="card-body" id="ov-domain-info"><span class="spinner"></span> Loading&hellip;</div>
+        </div>
+        <div class="card">
+          <div class="card-header">Replication (DRS)</div>
+          <div class="card-body" id="ov-drs"><span class="spinner"></span> Loading&hellip;</div>
+        </div>
+        <p class="muted">FSMO roles, DNS zones, Forest settings, and Sites each have their own tab above.</p>
+      </div>
+
+      <!-- DOMAIN -->
+      <div class="sadc-panel" id="panel-domain">
+        <div class="card">
+          <div class="card-header"><span>Domain info</span><button id="domain-info-refresh" class="small">Refresh</button></div>
+          <div class="card-body" id="domain-info-box"><span class="spinner"></span> Loading&hellip;</div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span>Domain / forest functional level</span><button id="domain-level-refresh" class="small">Refresh</button></div>
+          <div class="card-body">
+            <div id="domain-level-box"><span class="spinner"></span> Loading&hellip;</div>
+            <div class="form-row" style="margin-top:12px">
+              <label>Raise domain functional level to</label>
+              <div style="display:flex;gap:8px">
+                <select id="domain-level-target" style="max-width:220px">
+                  <option value="2008_R2">2008 R2</option>
+                  <option value="2012">2012</option>
+                  <option value="2012_R2">2012 R2</option>
+                  <option value="2016" selected>2016</option>
+                </select>
+                <button id="domain-level-raise-domain" class="small">Raise domain level</button>
+                <button id="domain-level-raise-forest" class="small">Raise forest level</button>
+              </div>
+              <p class="form-hint">Functional level changes are one-directional and affect every DC in the domain/forest. Confirm all DCs are updated first.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span>Password &amp; lockout policy</span><button id="domain-pwd-refresh" class="small">Refresh</button></div>
+          <div class="card-body">
+            <div id="domain-pwd-box"><span class="spinner"></span> Loading&hellip;</div>
+            <form id="domain-pwd-form" style="margin-top:14px">
+              <div class="form-grid">
+                <div class="form-row"><label>Complexity</label>
+                  <select id="pw-complexity"><option value="default">default</option><option value="on">on</option><option value="off">off</option></select>
+                </div>
+                <div class="form-row"><label>Minimum password length</label><input type="number" id="pw-minlen" min="0" max="255"></div>
+                <div class="form-row"><label>Password history length</label><input type="number" id="pw-history" min="0"></div>
+                <div class="form-row"><label>Minimum password age (days)</label><input type="number" id="pw-minage" min="0"></div>
+                <div class="form-row"><label>Maximum password age (days)</label><input type="number" id="pw-maxage" min="0"></div>
+                <div class="form-row"><label>Lockout threshold (0 = never)</label><input type="number" id="pw-lockthresh" min="0"></div>
+                <div class="form-row"><label>Lockout duration (minutes)</label><input type="number" id="pw-lockdur" min="0"></div>
+                <div class="form-row"><label>Reset lockout counter after (minutes)</label><input type="number" id="pw-lockreset" min="0"></div>
+              </div>
+              <button type="submit" class="primary small">Apply password settings</button>
+              <p class="form-hint">Leave a field blank to keep its current value.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- FOREST -->
+      <div class="sadc-panel" id="panel-forest">
+        <div class="card">
+          <div class="card-header"><span>Directory service (dsHeuristics)</span><button id="forest-ds-refresh" class="small">Refresh</button></div>
+          <div class="card-body">
+            <div id="forest-ds-box"><span class="spinner"></span> Loading&hellip;</div>
+            <div class="form-row" style="margin-top:12px">
+              <label>Set dsHeuristics value</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" id="forest-ds-value" placeholder="e.g. 0000002">
+                <button id="forest-ds-set" class="small">Set</button>
+              </div>
+              <p class="form-hint">A raw AD dsHeuristics string. Leave blank and click Set to clear it. Incorrect values can change forest-wide behaviour &mdash; check Microsoft's dsHeuristics reference before changing this.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FSMO -->
+      <div class="sadc-panel" id="panel-fsmo">
+        <div class="sadc-toolbar">
+          <div class="left"></div>
+          <div class="right"><button id="fsmo-refresh" class="small">Refresh</button></div>
+        </div>
+        <div class="card">
+          <div class="card-header">Current role holders</div>
+          <div class="card-body" id="fsmo-box"><span class="spinner"></span> Loading&hellip;</div>
+        </div>
+        <div class="card">
+          <div class="card-header">Transfer or seize a role</div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-row">
+                <label>Role</label>
+                <select id="fsmo-role">
+                  <option value="rid">RID master</option>
+                  <option value="pdc">PDC emulator</option>
+                  <option value="infrastructure">Infrastructure master</option>
+                  <option value="schema">Schema master</option>
+                  <option value="naming">Domain naming master</option>
+                  <option value="domaindns">Domain DNS zone master</option>
+                  <option value="forestdns">Forest DNS zone master</option>
+                </select>
+              </div>
+              <div class="form-row"><label>Target DC (optional, for transfer)</label><input type="text" id="fsmo-target" placeholder="defaults to this DC"></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button id="fsmo-transfer" class="small">Transfer to this DC</button>
+              <button id="fsmo-seize" class="small danger">Seize (force, use only if the old owner is gone)</button>
+            </div>
+            <p class="form-hint">Transfer is the graceful way to move a role between live DCs. Seize should only be used when the current role holder is permanently unavailable.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- SITES -->
+      <div class="sadc-panel" id="panel-sites">
+        <div class="sadc-toolbar">
+          <div class="left"></div>
+          <div class="right">
+            <button id="sites-refresh" class="small">Refresh</button>
+            <button id="sites-add" class="primary">Add site</button>
+          </div>
+        </div>
+        <div id="sites-table-wrap"><span class="spinner"></span> Loading&hellip;</div>
+        <div class="card">
+          <div class="card-header">Subnets</div>
+          <div class="card-body">
+            <div class="sadc-toolbar"><div class="left"></div><div class="right">
+              <button id="subnets-refresh" class="small">Refresh subnets</button>
+              <button id="subnets-add" class="primary small">Add subnet</button>
+            </div></div>
+            <div id="subnets-table-wrap"><span class="spinner"></span> Loading&hellip;</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DNS -->
+      <div class="sadc-panel" id="panel-dns">
+        <div class="card">
+          <div class="card-header">Zones</div>
+          <div class="card-body">
+            <div class="sadc-toolbar"><div class="left"></div><div class="right">
+              <button id="dns-zones-refresh" class="small">Refresh zones</button>
+              <button id="dns-zone-add" class="primary small">Create zone</button>
+            </div></div>
+            <div id="dns-zones-table-wrap"><span class="muted">Enter credentials below, then refresh.</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">Records</div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-row"><label>Zone</label><input type="text" id="dns-rec-zone" placeholder="example.com"></div>
+              <div class="form-row"><label>Name</label><input type="text" id="dns-rec-name" placeholder="www or @"></div>
+              <div class="form-row"><label>Type</label>
+                <select id="dns-rec-type"><option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>NS</option><option>SRV</option><option>TXT</option><option>PTR</option></select>
+              </div>
+              <div class="form-row"><label>Data</label><input type="text" id="dns-rec-data" placeholder="192.0.2.10"></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button id="dns-rec-query" class="small">Query</button>
+              <button id="dns-rec-add" class="small">Add record</button>
+              <button id="dns-rec-delete" class="small danger">Delete record</button>
+            </div>
+            <pre class="ldif" id="dns-rec-result" style="margin-top:10px"></pre>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">Credentials</div>
+          <div class="card-body">
+            <p class="muted" id="dns-creds-note">DNS management goes over the DNS RPC pipe and needs domain administrator credentials.</p>
+            <button id="dns-open-creds" class="small">Set credentials</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- USERS -->
+      <div class="sadc-panel" id="panel-users">
+        <div class="sadc-toolbar">
+          <div class="left">
+            <input type="text" id="users-search" placeholder="Filter users&hellip;" style="width:240px">
+          </div>
+          <div class="right">
+            <button id="users-refresh" class="small">Refresh</button>
+            <button id="users-import" class="small">Import from spreadsheet&hellip;</button>
+            <button id="users-add" class="primary">Add user</button>
+          </div>
+        </div>
+        <div class="bulk-bar" id="users-bulk-bar"></div>
+        <div id="users-table-wrap"><span class="spinner"></span> Loading&hellip;</div>
+      </div>
+
+      <!-- GROUPS -->
+      <div class="sadc-panel" id="panel-groups">
+        <div class="sadc-toolbar">
+          <div class="left">
+            <input type="text" id="groups-search" placeholder="Filter groups&hellip;" style="width:240px">
+          </div>
+          <div class="right">
+            <button id="groups-refresh" class="small">Refresh</button>
+            <button id="groups-add" class="primary">Add group</button>
+          </div>
+        </div>
+        <div class="bulk-bar" id="groups-bulk-bar"></div>
+        <div id="groups-table-wrap"><span class="spinner"></span> Loading&hellip;</div>
+      </div>
+
+      <!-- COMPUTERS -->
+      <div class="sadc-panel" id="panel-computers">
+        <div class="sadc-toolbar">
+          <div class="left">
+            <input type="text" id="computers-search" placeholder="Filter computers&hellip;" style="width:240px">
+          </div>
+          <div class="right">
+            <button id="computers-refresh" class="small">Refresh</button>
+            <button id="computers-add" class="primary">Add computer</button>
+          </div>
+        </div>
+        <div class="bulk-bar" id="computers-bulk-bar"></div>
+        <div id="computers-table-wrap"><span class="spinner"></span> Loading&hellip;</div>
+      </div>
+
+      <!-- CONTACTS -->
+      <div class="sadc-panel" id="panel-contacts">
+        <div class="sadc-toolbar">
+          <div class="left">
+            <input type="text" id="contacts-search" placeholder="Filter contacts&hellip;" style="width:240px">
+          </div>
+          <div class="right">
+            <button id="contacts-refresh" class="small">Refresh</button>
+            <button id="contacts-add" class="primary">Add contact</button>
+          </div>
+        </div>
+        <div class="bulk-bar" id="contacts-bulk-bar"></div>
+        <div id="contacts-table-wrap"><span class="spinner"></span> Loading&hellip;</div>
+      </div>
+
+      <!-- OUs -->
+      <div class="sadc-panel" id="panel-ous">
+        <div class="sadc-toolbar">
+          <div class="left"></div>
+          <div class="right">
+            <button id="ous-refresh" class="small">Refresh</button>
+            <button id="ous-add" class="primary">Add organizational unit</button>
+          </div>
+        </div>
+        <div class="bulk-bar" id="ous-bulk-bar"></div>
+        <div id="ous-table-wrap"><span class="spinner"></span> Loading&hellip;</div>
+      </div>
+
+      <!-- GPO (Group Policy Management + Editor, see gpo-ui.js) -->
+      <div class="sadc-panel" id="panel-gpo">
+        <div id="gpo-root"><span class="spinner"></span> Loading&hellip;</div>
+      </div>
+
+      <!-- SPN -->
+      <div class="sadc-panel" id="panel-spn">
+        <div class="card">
+          <div class="card-header">Service Principal Names</div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-row"><label>Account (user or computer)</label><input type="text" id="spn-account"></div>
+              <div class="form-row"><label>SPN</label><input type="text" id="spn-name" placeholder="HTTP/webserver.example.com"></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button id="spn-list" class="small">List SPNs for account</button>
+              <button id="spn-add" class="small">Add SPN</button>
+              <button id="spn-delete" class="small danger">Delete SPN</button>
+            </div>
+            <pre class="ldif" id="spn-result" style="margin-top:10px"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- DELEGATION -->
+      <div class="sadc-panel" id="panel-delegation">
+        <div class="card">
+          <div class="card-header">Delegation</div>
+          <div class="card-body">
+            <div class="form-row"><label>Account</label><input type="text" id="deleg-account" placeholder="sAMAccountName"></div>
+            <div style="display:flex;gap:8px;margin-bottom:14px">
+              <button id="deleg-show" class="small">Show delegation settings</button>
+            </div>
+            <div class="form-grid">
+              <div class="form-row"><label>Trusted for any service (Kerberos unconstrained)</label>
+                <div style="display:flex;gap:8px"><button id="deleg-anyservice-on" class="small">Turn on</button><button id="deleg-anyservice-off" class="small">Turn off</button></div>
+              </div>
+              <div class="form-row"><label>Trusted to authenticate for delegation (protocol transition)</label>
+                <div style="display:flex;gap:8px"><button id="deleg-anyprotocol-on" class="small">Turn on</button><button id="deleg-anyprotocol-off" class="small">Turn off</button></div>
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Constrained delegation: service principal</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" id="deleg-service-principal" placeholder="HTTP/target.example.com" style="flex:1">
+                <button id="deleg-service-add" class="small">Allow</button>
+                <button id="deleg-service-del" class="small danger">Remove</button>
+              </div>
+            </div>
+            <pre class="ldif" id="deleg-result"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACLs -->
+      <div class="sadc-panel" id="panel-acls">
+        <div class="card">
+          <div class="card-header">Directory (DS) ACLs</div>
+          <div class="card-body">
+            <p class="muted">Object security descriptors in the AD database, addressed by distinguished name.</p>
+            <div class="form-row"><label>Object DN</label><input type="text" id="dsacl-dn" placeholder="OU=Sales,DC=example,DC=com"></div>
+            <div class="form-row"><label>SDDL (for set/delete)</label><input type="text" id="dsacl-sddl" placeholder="(A;;RPWP;;;DA)"></div>
+            <div style="display:flex;gap:8px">
+              <button id="dsacl-get" class="small">Get ACL</button>
+              <button id="dsacl-set" class="small">Set ACE</button>
+              <button id="dsacl-delete" class="small danger">Delete ACE</button>
+            </div>
+            <pre class="ldif" id="dsacl-result"></pre>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">NT (filesystem) ACLs</div>
+          <div class="card-body">
+            <p class="muted">POSIX-file security descriptors, addressed by a path on this server (typically inside a share, or the sysvol).</p>
+            <div class="form-row"><label>File or directory path</label><input type="text" id="ntacl-path" placeholder="/srv/samba/share-name/somefile"></div>
+            <div class="form-row"><label>SDDL (for set)</label><input type="text" id="ntacl-sddl" placeholder="(A;;RPWP;;;DA)"></div>
+            <div style="display:flex;gap:8px">
+              <button id="ntacl-get" class="small">Get ACL</button>
+              <button id="ntacl-set" class="small">Set ACL</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button id="ntacl-sysvolcheck" class="small">sysvolcheck</button>
+              <button id="ntacl-sysvolreset" class="small">sysvolreset</button>
+            </div>
+            <pre class="ldif" id="ntacl-result"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- SERVER TIME -->
+      <div class="sadc-panel" id="panel-time">
+        <div class="card">
+          <div class="card-header">Server time</div>
+          <div class="card-body">
+            <div class="form-row"><label>Server</label><input type="text" id="time-server" placeholder="localhost" value="localhost"></div>
+            <button id="time-query" class="small">Query time</button>
+            <pre class="ldif" id="time-result"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- FILE SHARES -->
+      <div class="sadc-panel" id="panel-shares">
+        <div class="sadc-toolbar">
+          <div class="left"></div>
+          <div class="right">
+            <button id="shares-refresh" class="small">Refresh</button>
+            <button id="shares-add" class="primary">Add share</button>
+          </div>
+        </div>
+        <div id="shares-table-wrap"><span class="spinner"></span> Loading&hellip;</div>
+      </div>
+
+      <!-- CONFIGURATION -->
+      <div class="sadc-panel" id="panel-config">
+        <div class="card">
+          <div class="card-header">
+            <span>File sharing &amp; network discovery</span>
+            <button id="sharing-diag-run" class="primary small">Run diagnostics</button>
+          </div>
+          <div class="card-body">
+            <p class="muted" style="margin-top:0">Shows why this server may appear in Windows Explorer's <em>Network</em> view but fail to open: discovery daemon, listening ports, the announced name vs. DNS, firewall, and share permissions.</p>
+            <div id="sharing-diag"><span class="muted">Not run yet.</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span>/etc/samba/smb.conf</span>
+            <span>
+              <button id="config-validate" class="small">Validate (testparm)</button>
+              <button id="config-reload" class="small">Reload</button>
+              <button id="config-save" class="primary small">Save</button>
+            </span>
+          </div>
+          <div class="card-body">
+            <textarea id="config-editor" rows="28" spellcheck="false"></textarea>
+            <div class="form-hint">Changes are validated with <code class="inline">testparm -s</code> before saving. Saving writes the file directly; use Reload to apply without restarting the service.</div>
+          </div>
+        </div>
+        <div class="card" id="config-validate-result" style="display:none">
+          <div class="card-header">Validation output</div>
+          <div class="card-body"><pre class="ldif" id="config-validate-output"></pre></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- generic modal host -->
+  <div id="modal-host"></div>
+
+  <script src="../base1/cockpit.js"></script>
+  <script src="vendor/xlsx.core.min.js"></script>
+  <script src="gpo-core.js"></script>
+  <script src="gpo-builtin.js"></script>
+  <script src="gpo-catalogs.js"></script>
+  <script src="samba-adc.js"></script>
+  <script src="gpo-ui.js"></script>
+  <script src="sharing-ui.js"></script>
+</body>
+</html>

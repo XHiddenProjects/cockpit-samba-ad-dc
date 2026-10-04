@@ -1,0 +1,36 @@
+name: Release
+
+# Tag an extension release as <extension>-vX.Y.Z, e.g.  git tag samba-adc-v1.0.0 && git push --tags
+on:
+  push:
+    tags:
+      - '*-v[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          ext="${TAG%-v*}"
+          ver="${TAG##*-v}"
+          test -d "$ext" || { echo "No extension directory '$ext'"; exit 1; }
+          test "$(tr -d '[:space:]' < "$ext/VERSION")" = "$ver" || { echo "Tag version $ver does not match $ext/VERSION"; exit 1; }
+          echo "ext=$ext" >> "$GITHUB_OUTPUT"
+      - name: Check and build
+        env:
+          EXT: ${{ steps.tag.outputs.ext }}
+        run: |
+          python3 scripts/check_package.py "$EXT"
+          make dist EXT="$EXT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          generate_release_notes: true

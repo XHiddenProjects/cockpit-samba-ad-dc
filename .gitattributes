@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.png binary
+*.gz binary
+vendor/*.min.js -diff linguist-vendored
+samba-adc/gpo-catalogs.js linguist-generated
+samba-adc/package-lock.json -diff
